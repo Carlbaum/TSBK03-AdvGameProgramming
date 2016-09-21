@@ -98,7 +98,7 @@ Material ballMt = { { 1.0, 1.0, 1.0, 1.0 }, { 1.0, 1.0, 1.0, 0.0 },
                 };
 
 
-enum {kNumBalls = 16}; // Change as desired, max 16
+enum {kNumBalls = 4}; // Change as desired, max 16
 
 //------------------------------Globals---------------------------------
 ModelTexturePair tableAndLegs, tableSurf;
@@ -149,7 +149,6 @@ void loadMaterial(Material mt) {
   glUniform4fv(glGetUniformLocation(shader, "diffColor"), 1, &mt.diffColor[0]);
   glUniform1fv(glGetUniformLocation(shader, "shininess"), 1, &mt.shininess);
 }
-
 //---------------------------------- physics update and billiard table rendering ----------------------------------
 void updateWorld() {
 	// Zero forces
@@ -174,7 +173,14 @@ void updateWorld() {
 	// Detect collisions, calculate speed differences, apply forces
 	for (i = 0; i < kNumBalls; i++) {
     for (j = i+1; j < kNumBalls; j++) {
-        // YOUR CODE HERE
+      vec3 ballOffset = VectorSub(ball[j].X, ball[i].X);
+      float minDistance = 2*kBallSize;
+      float currentDistance = Norm(ballOffset);
+      //Check if colliding
+      if(currentDistance <= minDistance) {
+        ball[i].P = SetVector(0,0,0);
+        ball[j].P = SetVector(0,0,0);
+      }
     }
   }
 
@@ -185,6 +191,7 @@ void updateWorld() {
 		vec3 rotAxis = CrossProduct(ball[i].v, SetVector(0,-1,0));
     float rotAngle = 8.5f * currentTime * Norm(ball[i].v);
     ball[i].R = ArbRotate(rotAxis,rotAngle);
+
 	}
 
 // Update state, follows the book closely
