@@ -75,7 +75,7 @@ typedef struct {
 
   vec3 F, T; // accumulated force and torque
 
-//  mat4 J, Ji; We could have these but we can live without them for spheres.
+  mat4 J, Ji; //We could have these but we can live without them for spheres.
   vec3 omega; // Angular momentum
   vec3 v; // Change in velocity
 
@@ -312,6 +312,20 @@ void init() {
 		ball[i].X = SetVector(0.0, 0.0, 0.0);
 		ball[i].P = SetVector(((float)(i % 13))/ 50.0, 0.0, ((float)(i % 15))/50.0);
 		ball[i].R = IdentityMatrix();
+    ball[i].J = IdentityMatrix();
+    float off_diag = -6 * (ball[i].mass / 12 ) * kBallSize * kBallSize;
+    float diag = off_diag * -2;
+    for(int j = 0 ; j < 3 ; j++) {
+      for(int k = 0 ; k < 3 ; k++) {
+        int index = j + 4*k;
+        if(k == j) {
+          ball[i].J.m[index] = diag;
+        } else {
+          ball[i].J.m[index] = off_diag;
+        }
+      }
+    }
+    ball[i].Ji = InvertMat4(ball[i].J);
 	}
 	ball[0].X = SetVector(0, 0, 0);
 	ball[1].X = SetVector(0, 0, 0.5);
