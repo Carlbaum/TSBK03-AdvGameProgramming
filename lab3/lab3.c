@@ -37,6 +37,8 @@
 #define NUM_LIGHTS 1
 #define kBallSize 0.1
 
+#define epsilon 0.0
+
 #define abs(x) (x > 0.0? x: -x)
 
 void onTimer(int value);
@@ -178,8 +180,18 @@ void updateWorld() {
       float currentDistance = Norm(ballOffset);
       //Check if colliding
       if(currentDistance <= minDistance) {
-        ball[i].P = SetVector(0,0,0);
-        ball[j].P = SetVector(0,0,0);
+        vec3 velRel = VectorSub(ball[i].v, ball[j].v);
+
+        //Separate overlapping bodies in a very simple manner
+        vec3 collisionNormal = Normalize(ballOffset);
+        float collisionDepth = minDistance - currentDistance;
+        ball[i].X = VectorAdd(ball[i].X, ScalarMult(collisionNormal, -collisionDepth/1.999f));
+        ball[j].X = VectorAdd(ball[j].X, ScalarMult(collisionNormal, collisionDepth/1.999f));
+
+        float j_impulse = -(epsilon+1) * DotProduct(velRel,collisionNormal) / (1/ball[i].mass + 1/ball[j].mass);
+
+        ball[i].P = VectorAdd(ball[i].P,ScalarMult(collisionNormal,j_impulse/ball[i].mass));
+        ball[j].P = VectorSub(ball[j].P,ScalarMult(collisionNormal,j_impulse/ball[j].mass));
       }
     }
   }
@@ -201,6 +213,7 @@ void updateWorld() {
 
 		// Note: omega is not set. How do you calculate it?
 		// YOUR CODE HERE
+		// ball[i].omega = ball[i].L;
 
 //		v := P * 1/mass
 		ball[i].v = ScalarMult(ball[i].P, 1.0/(ball[i].mass));
@@ -295,7 +308,7 @@ void init() {
 
     // Initialize ball data, positions etc
 	for (i = 0; i < kNumBalls; i++) {
-		ball[i].mass = 1.0;
+		ball[i].mass = 1.0;//i == 1 ? 3.0 : 1.0;
 		ball[i].X = SetVector(0.0, 0.0, 0.0);
 		ball[i].P = SetVector(((float)(i % 13))/ 50.0, 0.0, ((float)(i % 15))/50.0);
 		ball[i].R = IdentityMatrix();
