@@ -20,12 +20,13 @@
 #include <math.h>
 
 // L�gg till egna globaler h�r efter behov.
+const int N_SHEEP = 20;
 int number_of_sprites;
 float cohesian_distance = 200.f;
 float separation_distance = 150.f;
 float kCohesionWeight = 0.005f;
 float kAvoidanceWeight = 0.005f;
-float kAlignmentWeight = 0.01f;
+float kAlignmentWeight = 0.005f;
 
 float vec2Norm(FPoint p1) {
   return sqrt(p1.h * p1.h + p1.v * p1.v);
@@ -83,12 +84,13 @@ void SpriteBehavior() // Din kod!
   SpritePtr current = gSpriteRoot;
   FPoint cohesion_direction[number_of_sprites];
   FPoint separation_direction[number_of_sprites];
-  // FPoint speed_difference[number_of_sprites];
+  FPoint speed_difference[number_of_sprites];
   int idx = 0;
   while (current != NULL) {
     int count_neighbours = 0;
     FPoint cp = current->position;
     FPoint gathering_direction = {0.f,0.f};
+    FPoint speed_diff = {0.f,0.f};
     separation_direction[idx] = vec2SetAll(0.0f);
 
     SpritePtr other = gSpriteRoot;
@@ -104,11 +106,11 @@ void SpriteBehavior() // Din kod!
       float dist = vec2Norm(offset);
 			// if the boid senses another one within a radius=cohesian_distance
       if ( dist < cohesian_distance ) {
+				speed_diff = vec2Add(speed_diff, vec2Sub(other->speed, current->speed));
         gathering_direction = vec2Add(gathering_direction, offset);
         if ( dist < separation_distance) {
           separation_direction[idx] = vec2Add(separation_direction[idx],vec2Scale(vec2Normalize(vec2Scale(offset,-1.f)),separation_distance-dist));
         }
-        // speed_difference[idx] = vec2Sub(other->speed, current->speed);
         count_neighbours++;
       }
       other = other->next;
@@ -116,7 +118,7 @@ void SpriteBehavior() // Din kod!
 
     // take the averages
     if ( count_neighbours > 0 ) {
-      // speed_difference[idx] = vec2Scale(speed_difference[idx],1.0f/count_neighbours);
+      speed_difference[idx] = vec2Scale(speed_diff, 1.0f/count_neighbours);
       cohesion_direction[idx] = vec2Scale(gathering_direction, 1.0f/count_neighbours);
       separation_direction[idx] = vec2Scale(separation_direction[idx], 1.0f/count_neighbours);
     } else { //no neighbours found => no contribution to speed
@@ -131,9 +133,11 @@ void SpriteBehavior() // Din kod!
   current = gSpriteRoot;
   idx = 0;
   while (current != NULL) {
-    FPoint new_speed = vec2Add(/*vec2Add(vec2Scale(speed_difference[idx], kAlignmentWeight), */
-                        vec2Scale(cohesion_direction[idx], kCohesionWeight)/*)*/,
-                        vec2Scale(separation_direction[idx], kAvoidanceWeight));
+    FPoint new_speed = vec2Add(
+														vec2Add(
+																vec2Scale(speed_difference[idx], kAlignmentWeight),
+		                        		vec2Scale(cohesion_direction[idx], kCohesionWeight)),
+                        		vec2Scale(separation_direction[idx], kAvoidanceWeight));
     current->speed = vec2Add(new_speed,current->speed);
     idx++;
     current = current->next;
@@ -253,10 +257,9 @@ void Init()
 	dogFace = GetFace("bilder/dog.tga"); // En hund
 	foodFace = GetFace("bilder/mat.tga"); // Mat
 
-  NewSprite(sheepFace, 350.f, 300.f, -1.f, 0.1f);
-	NewSprite(sheepFace, 450.f, 300.f, 1.f, -0.1f);
-	NewSprite(sheepFace, 400.f, 350.f, -0.1f, 1.f);
-	NewSprite(sheepFace, 400.f, 250.f, 0.1f, -1.f);
+	for(int i = 0; i < N_SHEEP; i++) {
+		  NewSprite(sheepFace, rand() % 800, rand() % 600, rand() % 2 - 1.0f , rand() % 2 - 1.0f );
+	}
   // NewSprite(foodFace, 550, 300, 1, 1.0);
   // NewSprite(dogFace, 700, 500, -1, 0.1);
   SpritePtr temp = gSpriteRoot;
@@ -284,6 +287,18 @@ int main(int argc, char **argv)
 
 	InitSpriteLight();
 	Init();
+
+	printf("\nBinded keys:\n"
+				 ".\t+ cohesion weight\n"
+				 ",\t- cohesion weight\n"
+				 "m\t+ cohesian distance\n"
+				 "n\t- cohesian distance\n"
+				 "l\t+ separation weight\n"
+				 "k\t- separation weight\n"
+				 "j\t+ separation distance\n"
+				 "h\t- separation distance\n"
+				 "o\t+ alignment weight\n"
+				 "i\t+ alignment weight\n\n" );
 
 	glutMainLoop();
 	return 0;
