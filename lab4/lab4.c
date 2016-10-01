@@ -17,22 +17,56 @@
 #include "SpriteLight.h"
 #include "GL_utilities.h"
 
+#include <math.h>
+
 // L�gg till egna globaler h�r efter behov.
 int number_of_sprites;
-float kCohesionWeight = 0.0005f;
+float cohesian_distance = 200.f;
+float separation_distance = 150.f;
+float kCohesionWeight = 0.005f;
+float kAvoidanceWeight = 0.005f;
 float kAlignmentWeight = 0.01f;
 
-float distance(FPoint p1, FPoint p2 ) {
-	return sqrt(pow(p1.h - p2.h, 2) + pow(p1.v - p2.v, 2));
+float vec2Norm(FPoint p1) {
+  return sqrt(p1.h * p1.h + p1.v * p1.v);
+}
+
+FPoint vec2Scale(FPoint vec, float factor) {
+  vec.h *= factor;
+  vec.v *= factor;
+  return vec;
+}
+
+FPoint vec2Normalize(FPoint p1) {
+  return vec2Scale(p1,vec2Norm(p1) == 0.0f ? 1.f : 1.f/vec2Norm(p1));
+}
+
+FPoint vec2Add(FPoint p1, FPoint p2) {
+  p1.h += p2.h;
+  p1.v += p2.v;
+  return p1;
 }
 
 FPoint vec2Sub(FPoint p1, FPoint p2) {
-  FPoint diff;
-  diff.h = p1.h-p2.h;
-  diff.v = p1.v-p2.v;
-  return diff;
+  p1.h -= p2.h;
+  p1.v -= p2.v;
+  return p1;
 }
 
+float distance(FPoint p1, FPoint p2 ) {
+	return vec2Norm(vec2Sub(p1,p2));
+}
+
+FPoint vec2SetAll(float val) {
+  FPoint v;
+  v.h = val;
+  v.v = val;
+  return v;
+}
+
+void vec2Print(FPoint v) {
+  printf("(%f,%f)\n",v.h,v.v );
+}
 
 void SpriteBehavior() // Din kod!
 {
@@ -41,62 +75,69 @@ void SpriteBehavior() // Din kod!
 // globala listroten, gSpriteRoot, f�r att kontrollera alla sprites
 // hastigheter och positioner, eller arbeta fr�n egna globaler.
 
-// 1. Flocking steg 1: Cohesion
-// Sök alla varelser inom visst avstånd, beräkna tyngdpunkt, gå mot denna.
+// Flocking
+// Step 1: Cohesion - DONE!
+// Step 2: Separation - DONE!
+// Step 3: Alignment - IN PROGRESS!
+// Step 4: Noise & Personality - NOT STARTED!
   SpritePtr current = gSpriteRoot;
-  //center_of_mass will eventually store the offset from one boids' position to a mass center
-  FPoint center_of_mass[number_of_sprites];
+  FPoint cohesion_direction[number_of_sprites];
+  FPoint separation_direction[number_of_sprites];
   // FPoint speed_difference[number_of_sprites];
   int idx = 0;
-  do {
-    int count = 0;
-    center_of_mass[idx].h = 0;
-    center_of_mass[idx].v = 0;
+  while (current != NULL) {
+    int count_neighbours = 0;
+    FPoint cp = current->position;
+    FPoint gathering_direction = {0.f,0.f};
+    separation_direction[idx] = vec2SetAll(0.0f);
 
     SpritePtr other = gSpriteRoot;
-    do {
+    while (other != NULL) {
+      // Don't compare one boid with itself
       if ( current == other ) {
         other = other->next;
         continue;
       }
-      if ( distance(current->position, other->position) < 200 ) {
-        center_of_mass[idx].h += other->position.h;
-        center_of_mass[idx].v += other->position.v;
+
+      FPoint op = other->position;
+			FPoint offset = vec2Sub(op,cp);
+      float dist = vec2Norm(offset);
+			// if the boid senses another one within a radius=cohesian_distance
+      if ( dist < cohesian_distance ) {
+        gathering_direction = vec2Add(gathering_direction, offset);
+        if ( dist < separation_distance) {
+          separation_direction[idx] = vec2Add(separation_direction[idx],vec2Scale(vec2Normalize(vec2Scale(offset,-1.f)),separation_distance-dist));
+        }
         // speed_difference[idx] = vec2Sub(other->speed, current->speed);
-        count++;
+        count_neighbours++;
       }
       other = other->next;
-    } while (other != NULL);
-
-    if ( count > 0 ) {
-      // speed_difference[idx].h /= count;
-      // speed_difference[idx].v /= count;
-      center_of_mass[idx].h /= count;
-      center_of_mass[idx].v /= count;
-    } else {
-      center_of_mass[idx].h = current->position.h;
-      center_of_mass[idx].v = current->position.v;
     }
 
-    //make center_of_mass store the local offset instead of world coord
-    center_of_mass[idx].h = center_of_mass[idx].h - current->position.h;
-    center_of_mass[idx].v = center_of_mass[idx].v - current->position.v;
-    current = current->next;
-    idx++;
+    // take the averages
+    if ( count_neighbours > 0 ) {
+      // speed_difference[idx] = vec2Scale(speed_difference[idx],1.0f/count_neighbours);
+      cohesion_direction[idx] = vec2Scale(gathering_direction, 1.0f/count_neighbours);
+      separation_direction[idx] = vec2Scale(separation_direction[idx], 1.0f/count_neighbours);
+    } else { //no neighbours found => no contribution to speed
+      cohesion_direction[idx] = vec2SetAll(0.0f);
+      separation_direction[idx] = vec2SetAll(0.0f);
+    }
 
-    printf("%d's neighbours: %d\n",idx,count);
-    printf("%d's avg. posit: %f,%f\n",idx,center_of_mass[idx].h,center_of_mass[idx].v);
-  } while (current != NULL);
+		current = current->next;
+    idx++;
+	}
 
   current = gSpriteRoot;
   idx = 0;
-  do {
-    current->speed.h += /*speed_difference[idx].h*kAlignmentWeight + */center_of_mass[idx].h * kCohesionWeight;
-    current->speed.v += /*speed_difference[idx].v*kAlignmentWeight + */center_of_mass[idx].v * kCohesionWeight;
-    printf("%d current->speed = %f,%f\n",idx,current->speed.h,current->speed.v );
+  while (current != NULL) {
+    FPoint new_speed = vec2Add(/*vec2Add(vec2Scale(speed_difference[idx], kAlignmentWeight), */
+                        vec2Scale(cohesion_direction[idx], kCohesionWeight)/*)*/,
+                        vec2Scale(separation_direction[idx], kAvoidanceWeight));
+    current->speed = vec2Add(new_speed,current->speed);
     idx++;
     current = current->next;
-  } while (current != NULL);
+  }
 }
 
 // Drawing routine
@@ -156,6 +197,46 @@ void Key(unsigned char key,
     	someValue -= 0.1;
     	printf("someValue = %f\n", someValue);
     	break;
+    case '.':
+    	kCohesionWeight += 0.001;
+    	printf("kCohesionWeight = %f\n", kCohesionWeight);
+    	break;
+    case ',':
+    	kCohesionWeight -= 0.001;
+    	printf("kCohesionWeight = %f\n", kCohesionWeight);
+    	break;
+    case 'l':
+    	kAvoidanceWeight += 0.001;
+    	printf("kAvoidanceWeight = %f\n", kAvoidanceWeight);
+    	break;
+    case 'k':
+    	kAvoidanceWeight -= 0.001;
+    	printf("kAvoidanceWeight = %f\n", kAvoidanceWeight);
+    	break;
+    case 'o':
+    	kAlignmentWeight += 0.001;
+    	printf("kAlignmentWeight = %f\n", kAlignmentWeight);
+    	break;
+    case 'i':
+    	kAlignmentWeight -= 0.001;
+    	printf("kAlignmentWeight = %f\n", kAlignmentWeight);
+    	break;
+    case 'm':
+    	cohesian_distance += 5;
+    	printf("cohesian_distance = %f\n", cohesian_distance);
+    	break;
+    case 'n':
+    	cohesian_distance -= 5;
+    	printf("cohesian_distance = %f\n", cohesian_distance);
+    	break;
+    case 'j':
+    	separation_distance += 5;
+    	printf("separation_distance = %f\n", separation_distance);
+    	break;
+    case 'h':
+    	separation_distance -= 5;
+    	printf("separation_distance = %f\n", separation_distance);
+    	break;
     case 0x1b:
       exit(0);
   }
@@ -172,12 +253,12 @@ void Init()
 	dogFace = GetFace("bilder/dog.tga"); // En hund
 	foodFace = GetFace("bilder/mat.tga"); // Mat
 
-  NewSprite(blackFace, 150, 150, -1, 1.5);
-	NewSprite(sheepFace, 100, 200, 1, 1);
-	NewSprite(sheepFace, 200, 100, 1.5, -1);
-	NewSprite(sheepFace, 600, 200, -1, 1.5);
-  NewSprite(foodFace, 550, 300, 1, 1.0);
-  NewSprite(dogFace, 700, 500, -1, 0.1);
+  NewSprite(sheepFace, 350.f, 300.f, -1.f, 0.1f);
+	NewSprite(sheepFace, 450.f, 300.f, 1.f, -0.1f);
+	NewSprite(sheepFace, 400.f, 350.f, -0.1f, 1.f);
+	NewSprite(sheepFace, 400.f, 250.f, 0.1f, -1.f);
+  // NewSprite(foodFace, 550, 300, 1, 1.0);
+  // NewSprite(dogFace, 700, 500, -1, 0.1);
   SpritePtr temp = gSpriteRoot;
   int counter = 0;
   do {
